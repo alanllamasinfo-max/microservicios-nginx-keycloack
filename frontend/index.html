@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Portal de Microservicios</title>
+    <script src="http://localhost/auth/js/keycloak.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f4; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .token-area { width: 100%; height: 100px; margin-top: 10px; font-family: monospace; font-size: 12px; }
+        .status-online { color: green; font-weight: bold; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🚀 Mi Portal Seguro</h1>
+        <div id="auth-status">Verificando sesión...</div>
+        <hr>
+        <div id="user-info" style="display: none;">
+            <p>Bienvenido, <span id="username" class="status-online"></span></p>
+            <p><strong>Tu Token JWT:</strong></p>
+            <textarea id="token-display" class="token-area" readonly></textarea>
+            <br><br>
+            <button onclick="keycloak.logout()">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <script>
+        const keycloak = new Keycloak({
+            url: 'http://localhost/auth', // Usamos el Gateway
+            realm: 'myrealm',
+            clientId: 'my-frontend-client'
+        });
+
+        keycloak.init({ 
+            onLoad: 'login-required',
+            checkLoginIframe: false 
+        }).then(authenticated => {
+            if (authenticated) {
+                document.getElementById('auth-status').innerHTML = "✅ Sesión Iniciada";
+                document.getElementById('user-info').style.display = "block";
+                document.getElementById('username').innerText = keycloak.tokenParsed.preferred_username;
+                document.getElementById('token-display').value = keycloak.token;
+            } else {
+                document.getElementById('auth-status').innerHTML = "❌ No autenticado";
+            }
+        }).catch(err => {
+            document.getElementById('auth-status').innerHTML = "⚠️ Error al conectar con Keycloak";
+            console.error(err);
+        });
+    </script>
+</body>
+</html>

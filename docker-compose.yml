@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    environment:
+      POSTGRES_DB: keycloak_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend_network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0
+    container_name: keycloak_server
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres_db:5432/keycloak_db
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: password123
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_RELATIVE_PATH: /auth
+    volumes:
+      - ./keycloak_config:/opt/keycloak/data/import/
+    depends_on:
+      - postgres_db
+    networks:
+      - backend_network
+
+  user_service:
+    build: ./backend
+    container_name: user_service
+    environment:
+      KEYCLOAK_ISSUER: http://keycloak_server:8080/auth/realms/myrealm
+      DATABASE_URL: postgresql://admin:password123@postgres_db:5432/keycloak_db
+    depends_on:
+      - keycloak
+    networks:
+      - backend_network
+
+  gateway:
+    image: nginx:alpine
+    container_name: api_gateway
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - backend_network
+
+volumes:
+  postgres_data:
+
+networks:
+  backend_network:
+    driver: bridge
