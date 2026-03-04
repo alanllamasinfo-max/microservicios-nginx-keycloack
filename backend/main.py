@@ -2,8 +2,11 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from keycloak import KeycloakOpenID
 from jose import jwt # Importamos jose directamente
+from prometheus_fastapi_instrumentator import Instrumentator #linea anadida para el uso de prometheus``
 
 app = FastAPI()
+
+Instrumentator().instrument(app).expose(app)
 
 # Configuración interna
 KC_SERVER_URL = "http://keycloak_server:8080/auth/"

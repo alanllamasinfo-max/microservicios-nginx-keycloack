@@ -5,3 +5,4 @@ psycopg2-binary
 pymysql
 python-keycloak
 python-jose[cryptography]
+prometheus-fastapi-instrumentator
