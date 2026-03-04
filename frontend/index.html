@@ -27,27 +27,32 @@
     </div>
 
     <script>
+        // Configuración para conectar a través del Gateway Nginx
         const keycloak = new Keycloak({
-            url: 'http://localhost/auth', // Usamos el Gateway
+            url: 'http://localhost/auth', 
             realm: 'myrealm',
             clientId: 'my-frontend-client'
         });
 
         keycloak.init({ 
             onLoad: 'login-required',
-            checkLoginIframe: false 
+            checkLoginIframe: false,
+            // Importante: Si Keycloak devuelve error de "identidad", 
+            // asegúrate de que el Realm 'myrealm' exista.
+            pkceMethod: 'S256' 
         }).then(authenticated => {
             if (authenticated) {
                 document.getElementById('auth-status').innerHTML = "✅ Sesión Iniciada";
                 document.getElementById('user-info').style.display = "block";
                 document.getElementById('username').innerText = keycloak.tokenParsed.preferred_username;
                 document.getElementById('token-display').value = keycloak.token;
+                console.log("Token enviado al backend:", keycloak.token);
             } else {
                 document.getElementById('auth-status').innerHTML = "❌ No autenticado";
             }
         }).catch(err => {
             document.getElementById('auth-status').innerHTML = "⚠️ Error al conectar con Keycloak";
-            console.error(err);
+            console.error("Fallo en la inicialización:", err);
         });
     </script>
 </body>
