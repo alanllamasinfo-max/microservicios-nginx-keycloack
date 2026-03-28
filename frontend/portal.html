@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SecureGateway — Portal</title>
+  <script src="http://localhost/auth/js/keycloak.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #050810;
+      --surface:   #0b0f1a;
+      --surface-2: #111827;
+      --border:    #1a2235;
+      --border-hi: #243047;
+      --cyan:      #06b6d4;
+      --cyan-dim:  #0e3d4a;
+      --cyan-glow: rgba(6,182,212,0.12);
+      --green:     #10b981;
+      --red:       #f43f5e;
+      --amber:     #f59e0b;
+      --text:      #e2e8f0;
+      --text-dim:  #64748b;
+      --text-muted:#334155;
+      --font:      'DM Sans', sans-serif;
+      --mono:      'DM Mono', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+    }
+
+    /* ── Animated grid background ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(6,182,212,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(6,182,212,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Glow orb ── */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px; height: 400px;
+      background: radial-gradient(ellipse, rgba(6,182,212,0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ══════════════════════════════
+       LOGIN SCREEN
+    ══════════════════════════════ */
+    #login-screen {
+      position: fixed; inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      gap: 0;
+    }
+
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border-hi);
+      border-radius: 20px;
+      padding: 3rem 2.5rem;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .login-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%; transform: translateX(-50%);
+      width: 200px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    }
+
+    .lock-icon {
+      width: 64px; height: 64px;
+      margin: 0 auto 1.5rem;
+      background: var(--cyan-dim);
+      border: 1px solid rgba(6,182,212,0.3);
+      border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.75rem;
+      position: relative;
+    }
+
+    .lock-icon::after {
+      content: '';
+      position: absolute; inset: -6px;
+      border-radius: 20px;
+      border: 1px solid rgba(6,182,212,0.1);
+    }
+
+    .login-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.5rem;
+    }
+
+    .login-sub {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-bottom: 2.5rem;
+      line-height: 1.6;
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 0.85rem;
+      background: var(--cyan);
+      color: #000;
+      font-family: var(--font);
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .login-btn:hover {
+      background: #22d3ee;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(6,182,212,0.25);
+    }
+
+    .login-meta {
+      margin-top: 1.5rem;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .login-meta::before,
+    .login-meta::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Verifying state */
+    #verifying {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      padding: 2rem;
+    }
+
+    .spinner-ring {
+      width: 40px; height: 40px;
+      border: 2px solid var(--border-hi);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error state */
+    #error-state {
+      display: none;
+      text-align: center;
+      padding: 2rem;
+    }
+    .error-icon { font-size: 2rem; margin-bottom: 1rem; }
+    .error-title { color: var(--red); font-weight: 600; margin-bottom: 0.5rem; }
+    .error-msg { font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim); }
+
+    /* ══════════════════════════════
+       PORTAL (post-login)
+    ══════════════════════════════ */
+    #portal {
+      display: none;
+      min-height: 100vh;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2.5rem;
+      height: 60px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(5,8,16,0.7);
+      backdrop-filter: blur(16px);
+      position: sticky; top: 0; z-index: 50;
+    }
+
+    .brand {
+      display: flex; align-items: center; gap: 0.625rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .brand-icon {
+      width: 28px; height: 28px;
+      background: var(--cyan-dim);
+      border: 1px solid rgba(6,182,212,0.4);
+      border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem;
+    }
+
+    .brand-name { color: var(--text); }
+    .brand-name span { color: var(--cyan); }
+
+    .topbar-right {
+      display: flex; align-items: center; gap: 1rem;
+    }
+
+    .session-badge {
+      display: flex; align-items: center; gap: 0.4rem;
+      font-family: var(--mono); font-size: 0.68rem;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      padding: 0.3rem 0.75rem;
+      border-radius: 100px;
+    }
+
+    .dot-live {
+      width: 6px; height: 6px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 50% { opacity: 0.3; } }
+
+    .logout-btn {
+      display: flex; align-items: center; gap: 0.4rem;
+      background: transparent;
+      border: 1px solid var(--border-hi);
+      color: var(--text-dim);
+      padding: 0.35rem 0.9rem;
+      border-radius: 8px;
+      font-family: var(--font); font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── Main content ── */
+    .portal-content {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 3rem 2.5rem;
+    }
+
+    /* Welcome strip */
+    .welcome-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2.5rem;
+      padding-bottom: 2.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .welcome-left {}
+
+    .welcome-label {
+      font-family: var(--mono); font-size: 0.68rem;
+      color: var(--cyan); letter-spacing: 0.12em;
+      text-transform: uppercase; margin-bottom: 0.5rem;
+    }
+
+    .welcome-name {
+      font-size: 2rem; font-weight: 600;
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .welcome-email {
+      font-family: var(--mono); font-size: 0.75rem;
+      color: var(--text-dim); margin-top: 0.4rem;
+    }
+
+    .auth-verified-badge {
+      display: flex; align-items: center; gap: 0.75rem;
+      background: rgba(16,185,129,0.08);
+      border: 1px solid rgba(16,185,129,0.2);
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+    }
+    .verified-icon { font-size: 1.5rem; }
+    .verified-text {}
+    .verified-title { font-weight: 600; font-size: 0.85rem; color: var(--green); }
+    .verified-sub { font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim); margin-top: 0.2rem; }
+
+    /* ── 3-col grid ── */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .info-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+      transition: border-color 0.2s;
+    }
+    .info-card:hover { border-color: var(--border-hi); }
+
+    .card-label {
+      font-family: var(--mono); font-size: 0.62rem;
+      color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.12em; margin-bottom: 0.6rem;
+    }
+
+    .card-value {
+      font-size: 0.9rem; font-weight: 500;
+      word-break: break-all;
+    }
+
+    .card-value.mono { font-family: var(--mono); font-size: 0.78rem; }
+
+    /* Roles list */
+    .roles-list {
+      display: flex; flex-wrap: wrap; gap: 0.4rem;
+      margin-top: 0.25rem;
+    }
+
+    .role-tag {
+      font-family: var(--mono); font-size: 0.62rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      background: var(--cyan-dim);
+      color: var(--cyan);
+      border: 1px solid rgba(6,182,212,0.2);
+    }
+
+    /* ── JWT section ── */
+    .jwt-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+    }
+
+    .jwt-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .jwt-title {
+      display: flex; align-items: center; gap: 0.6rem;
+      font-size: 0.85rem; font-weight: 600;
+    }
+
+    .jwt-title-icon {
+      font-size: 1rem;
+    }
+
+    .jwt-actions {
+      display: flex; gap: 0.5rem;
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: 1px solid var(--border-hi);
+      color: var(--text-dim);
+      padding: 0.3rem 0.75rem;
+      border-radius: 6px;
+      font-family: var(--mono); font-size: 0.65rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.05em;
+    }
+    .copy-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+    .copy-btn.copied { border-color: var(--green); color: var(--green); }
+
+    .jwt-body {
+      padding: 1.25rem 1.5rem;
+    }
+
+    /* JWT parts display */
+    .jwt-parts {
+      display: flex; flex-direction: column; gap: 0.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .jwt-part {
+      font-family: var(--mono); font-size: 0.68rem;
+      line-height: 1.6; word-break: break-all;
+      padding: 0.6rem 0.9rem;
+      border-radius: 8px;
+    }
+
+    .jwt-part-header  { background: rgba(96,165,250,0.08); color: #93c5fd; border-left: 2px solid #3b82f6; }
+    .jwt-part-payload { background: rgba(16,185,129,0.08); color: #6ee7b7; border-left: 2px solid var(--green); }
+    .jwt-part-sig     { background: rgba(244,63,94,0.08);  color: #fda4af; border-left: 2px solid var(--red); }
+
+    .jwt-part-label {
+      font-size: 0.58rem; text-transform: uppercase;
+      letter-spacing: 0.12em; opacity: 0.6; margin-bottom: 0.25rem;
+    }
+
+    /* Decoded payload */
+    .decoded-section { margin-top: 1rem; }
+    .decoded-label {
+      font-family: var(--mono); font-size: 0.62rem;
+      color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.12em; margin-bottom: 0.6rem;
+    }
+
+    .decoded-json {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: var(--mono); font-size: 0.72rem;
+      line-height: 1.9;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+
+    .decoded-json::-webkit-scrollbar { width: 4px; }
+    .decoded-json::-webkit-scrollbar-track { background: transparent; }
+    .decoded-json::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+
+    .j-key  { color: #93c5fd; }
+    .j-str  { color: #6ee7b7; }
+    .j-num  { color: #fb923c; }
+    .j-bool { color: #c4b5fd; }
+
+    /* ── Expiry bar ── */
+    .expiry-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+    }
+
+    .expiry-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .expiry-title { font-size: 0.85rem; font-weight: 600; }
+
+    .expiry-time {
+      font-family: var(--mono); font-size: 0.72rem;
+      color: var(--cyan);
+    }
+
+    .progress-track {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), #22d3ee);
+      border-radius: 2px;
+      transition: width 1s linear;
+    }
+
+    .expiry-sub {
+      font-family: var(--mono); font-size: 0.65rem;
+      color: var(--text-dim); margin-top: 0.75rem;
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .portal-content > * {
+      animation: fadeIn 0.5s ease both;
+    }
+    .portal-content > *:nth-child(2) { animation-delay: 0.08s; }
+    .portal-content > *:nth-child(3) { animation-delay: 0.16s; }
+    .portal-content > *:nth-child(4) { animation-delay: 0.24s; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .info-grid { grid-template-columns: 1fr; }
+      .welcome-strip { flex-direction: column; gap: 1.5rem; align-items: flex-start; }
+      .topbar { padding: 0 1.25rem; }
+      .portal-content { padding: 2rem 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══ LOGIN SCREEN ══ -->
+  <div id="login-screen">
+
+    <!-- Verifying -->
+    <div id="verifying">
+      <div class="spinner-ring"></div>
+      <span style="font-family:var(--mono); font-size:0.72rem; color:var(--text-dim);">Verificando sesión...</span>
+    </div>
+
+    <!-- Login card (hidden initially) -->
+    <div class="login-card" id="login-card" style="display:none;">
+      <div class="lock-icon">🔐</div>
+      <div class="login-title">SecureGateway</div>
+      <div class="login-sub">
+        Autenticación mediante Keycloak.<br>
+        Se requiere cuenta válida para acceder.
+      </div>
+      <button class="login-btn" onclick="keycloak.login()">
+        <span>→</span>
+        <span>Iniciar sesión con Keycloak</span>
+      </button>
+      <div class="login-meta">OAuth 2.0 + PKCE · RS256</div>
+    </div>
+
+    <!-- Error state -->
+    <div class="login-card" id="error-state" style="display:none;">
+      <div class="error-icon">⚠️</div>
+      <div class="error-title">Error de conexión</div>
+      <div class="error-msg" id="error-msg">No se pudo conectar con Keycloak.</div>
+      <button class="login-btn" style="margin-top:1.5rem;" onclick="location.reload()">
+        Reintentar
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ══ PORTAL (post-login) ══ -->
+  <div id="portal">
+
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-icon">🔐</div>
+        <div class="brand-name">Secure<span>Gateway</span></div>
+      </div>
+      <div class="topbar-right">
+        <div class="session-badge">
+          <div class="dot-live"></div>
+          <span id="session-label">Sesión activa</span>
+        </div>
+        <button class="logout-btn" onclick="keycloak.logout()">
+          ↩ Cerrar sesión
+        </button>
+      </div>
+    </div>
+
+    <div class="portal-content">
+
+      <!-- Welcome -->
+      <div class="welcome-strip">
+        <div class="welcome-left">
+          <div class="welcome-label">// Acceso concedido</div>
+          <div class="welcome-name" id="welcome-name">—</div>
+          <div class="welcome-email" id="welcome-email">—</div>
+        </div>
+        <div class="auth-verified-badge">
+          <div class="verified-icon">✅</div>
+          <div class="verified-text">
+            <div class="verified-title">Token JWT verificado</div>
+            <div class="verified-sub">Firmado RS256 · Keycloak IdP</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Info cards -->
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="card-label">Usuario</div>
+          <div class="card-value" id="card-username">—</div>
+        </div>
+        <div class="info-card">
+          <div class="card-label">Subject (sub)</div>
+          <div class="card-value mono" id="card-sub">—</div>
+        </div>
+        <div class="info-card">
+          <div class="card-label">Roles asignados</div>
+          <div class="roles-list" id="card-roles">—</div>
+        </div>
+      </div>
+
+      <!-- JWT section -->
+      <div class="jwt-section">
+        <div class="jwt-header">
+          <div class="jwt-title">
+            <span class="jwt-title-icon">🔑</span>
+            Access Token JWT
+          </div>
+          <div class="jwt-actions">
+            <button class="copy-btn" id="copyRawBtn" onclick="copyToken()">COPIAR TOKEN</button>
+          </div>
+        </div>
+        <div class="jwt-body">
+          <div class="jwt-parts">
+            <div class="jwt-part jwt-part-header">
+              <div class="jwt-part-label">Header</div>
+              <span id="jwt-header-part">—</span>
+            </div>
+            <div class="jwt-part jwt-part-payload">
+              <div class="jwt-part-label">Payload</div>
+              <span id="jwt-payload-part">—</span>
+            </div>
+            <div class="jwt-part jwt-part-sig">
+              <div class="jwt-part-label">Signature</div>
+              <span id="jwt-sig-part">—</span>
+            </div>
+          </div>
+
+          <div class="decoded-section">
+            <div class="decoded-label">Payload decodificado</div>
+            <div class="decoded-json" id="decoded-payload">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Token expiry -->
+      <div class="expiry-card">
+        <div class="expiry-header">
+          <div class="expiry-title">Validez del token</div>
+          <div class="expiry-time" id="expiry-countdown">—</div>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="expiry-bar" style="width:100%"></div>
+        </div>
+        <div class="expiry-sub" id="expiry-sub">—</div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const keycloak = new Keycloak({
+      url: 'http://localhost/auth',
+      realm: 'myrealm',
+      clientId: 'my-frontend-client'
+    });
+
+    keycloak.init({
+      onLoad: 'check-sso',
+      checkLoginIframe: false,
+      pkceMethod: 'S256'
+    }).then(authenticated => {
+      document.getElementById('verifying').style.display = 'none';
+
+      if (authenticated) {
+        showPortal();
+      } else {
+        document.getElementById('login-card').style.display = 'block';
+      }
+    }).catch(err => {
+      document.getElementById('verifying').style.display = 'none';
+      document.getElementById('error-state').style.display = 'block';
+      document.getElementById('error-msg').textContent =
+        'No se pudo contactar con Keycloak. Verifica que el servicio esté activo.';
+      console.error('Keycloak init error:', err);
+    });
+
+    function showPortal() {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('portal').style.display = 'block';
+
+      const p = keycloak.tokenParsed;
+      const token = keycloak.token;
+
+      // Welcome
+      document.getElementById('welcome-name').textContent =
+        p.name || p.preferred_username || 'Usuario';
+      document.getElementById('welcome-email').textContent =
+        p.email || '';
+      document.getElementById('session-label').textContent =
+        `${p.preferred_username} · Sesión activa`;
+
+      // Cards
+      document.getElementById('card-username').textContent =
+        p.preferred_username || '—';
+      document.getElementById('card-sub').textContent =
+        p.sub ? p.sub.slice(0, 36) : '—';
+
+      const roles = p.realm_access?.roles?.filter(r =>
+        !['offline_access', 'uma_authorization', 'default-roles-myrealm'].includes(r)
+      ) || [];
+      const rolesEl = document.getElementById('card-roles');
+      rolesEl.innerHTML = roles.length
+        ? roles.map(r => `<span class="role-tag">${r}</span>`).join('')
+        : '<span style="font-family:var(--mono); font-size:0.72rem; color:var(--text-dim);">Sin roles adicionales</span>';
+
+      // JWT parts
+      const parts = token.split('.');
+      document.getElementById('jwt-header-part').textContent =
+        parts[0] ? truncate(parts[0], 80) : '—';
+      document.getElementById('jwt-payload-part').textContent =
+        parts[1] ? truncate(parts[1], 80) : '—';
+      document.getElementById('jwt-sig-part').textContent =
+        parts[2] ? truncate(parts[2], 60) + '...' : '—';
+
+      // Decoded payload
+      const decoded = document.getElementById('decoded-payload');
+      decoded.innerHTML = syntaxHL(JSON.stringify(p, null, 2));
+
+      // Expiry countdown
+      if (p.exp) {
+        const issuedAt  = p.iat * 1000;
+        const expiresAt = p.exp * 1000;
+        const totalMs   = expiresAt - issuedAt;
+        updateExpiry(expiresAt, totalMs);
+        setInterval(() => updateExpiry(expiresAt, totalMs), 1000);
+      }
+    }
+
+    function updateExpiry(expiresAt, totalMs) {
+      const now       = Date.now();
+      const remaining = Math.max(0, expiresAt - now);
+      const pct       = Math.max(0, (remaining / totalMs) * 100);
+      const mins      = Math.floor(remaining / 60000);
+      const secs      = Math.floor((remaining % 60000) / 1000);
+
+      document.getElementById('expiry-countdown').textContent =
+        remaining > 0 ? `${mins}m ${secs}s restantes` : 'Expirado';
+
+      const bar = document.getElementById('expiry-bar');
+      bar.style.width = pct + '%';
+      bar.style.background = pct > 50
+        ? 'linear-gradient(90deg, var(--cyan), #22d3ee)'
+        : pct > 20
+          ? 'linear-gradient(90deg, var(--amber), #fbbf24)'
+          : 'linear-gradient(90deg, var(--red), #fb7185)';
+
+      const expDate = new Date(expiresAt);
+      document.getElementById('expiry-sub').textContent =
+        `Emitido: ${new Date(keycloak.tokenParsed?.iat * 1000).toLocaleTimeString('es-ES')} · ` +
+        `Expira: ${expDate.toLocaleTimeString('es-ES')}`;
+    }
+
+    function copyToken() {
+      navigator.clipboard.writeText(keycloak.token).then(() => {
+        const btn = document.getElementById('copyRawBtn');
+        btn.textContent = '✓ COPIADO';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'COPIAR TOKEN';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    function truncate(str, n) {
+      return str.length > n ? str.slice(0, n) : str;
+    }
+
+    function syntaxHL(json) {
+      return json
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"([^"]+)":/g, '<span class="j-key">"$1"</span>:')
+        .replace(/: "([^"]+)"/g, ': <span class="j-str">"$1"</span>')
+        .replace(/: (-?\d+\.?\d*)/g, ': <span class="j-num">$1</span>')
+        .replace(/: (true|false|null)/g, ': <span class="j-bool">$1</span>');
+    }
+  </script>
+</body>
+</html>
